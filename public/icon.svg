@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#1F6F5C" />
+  <!-- Marcador blanco -->
+  <path
+    d="M256 86 C182 86 122 146 122 220 C122 300 236 414 248.5 426.5 C252.6 430.6 259.4 430.6 263.5 426.5 C276 414 390 300 390 220 C390 146 330 86 256 86 Z"
+    fill="#FFFFFF"
+  />
+  <!-- Estrella dorada -->
+  <polygon
+    points="256,146 271,192 317,194 280,221 294,264 256,238 218,264 232,221 195,194 241,192"
+    fill="#F59E0B"
+  />
+</svg>
