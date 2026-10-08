@@ -1,0 +1,303 @@
+{
+  "entities": {
+    "recommendation": {
+      "title": "Recommendation",
+      "description": "A place recommendation shared by friends in the group",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Name of the place"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["comer", "cafe", "salir", "paseo"],
+          "description": "Category of place: comer, cafe, salir, paseo"
+        },
+        "zone": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Zone or neighborhood"
+        },
+        "price": {
+          "type": "number",
+          "enum": [1, 2, 3],
+          "description": "Price level: 1 ($), 2 ($$), or 3 ($$$)"
+        },
+        "rating": {
+          "type": "number",
+          "enum": [1, 2, 3, 4, 5],
+          "description": "Rating given by the recommender (1-5)"
+        },
+        "whatToOrder": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "What to order or what to do at the place"
+        },
+        "comment": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Review or commentary by the author"
+        },
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Author UID from Google Auth"
+        },
+        "authorName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Author display name"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["publicada", "reportada", "oculta"],
+          "description": "Recommendation status"
+        },
+        "reviewCount": {
+          "type": "number",
+          "description": "Count of reviews, begins at 0"
+        },
+        "ratingSum": {
+          "type": "number",
+          "description": "Sum of ratings, begins at 0"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp"
+        }
+      },
+      "required": [
+        "name",
+        "category",
+        "zone",
+        "price",
+        "rating",
+        "whatToOrder",
+        "comment",
+        "authorId",
+        "authorName",
+        "status",
+        "reviewCount",
+        "ratingSum",
+        "createdAt"
+      ]
+    },
+    "review": {
+      "title": "Review",
+      "description": "A review left by someone who also visited the recommended place",
+      "type": "object",
+      "properties": {
+        "recommendationId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Parent recommendation identifier"
+        },
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Author UID of reviewer"
+        },
+        "authorName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Author display name of reviewer"
+        },
+        "rating": {
+          "type": "number",
+          "enum": [1, 2, 3, 4, 5],
+          "description": "Rating given by the reviewer (1-5)"
+        },
+        "comment": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Review comment"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp"
+        }
+      },
+      "required": [
+        "recommendationId",
+        "authorId",
+        "authorName",
+        "rating",
+        "comment",
+        "createdAt"
+      ]
+    },
+    "savedPlace": {
+      "title": "SavedPlace",
+      "description": "A place saved in the user's private Quiero ir collection",
+      "type": "object",
+      "properties": {
+        "recommendationId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Referenced recommendation ID"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Place name"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["comer", "cafe", "salir", "paseo"],
+          "description": "Category of the place"
+        },
+        "zone": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Zone or neighborhood"
+        },
+        "price": {
+          "type": "number",
+          "enum": [1, 2, 3],
+          "description": "Price level"
+        },
+        "savedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the place was saved"
+        }
+      },
+      "required": [
+        "recommendationId",
+        "name",
+        "category",
+        "zone",
+        "price",
+        "savedAt"
+      ]
+    },
+    "groupList": {
+      "title": "GroupList",
+      "description": "A group decision list asking a question where members vote on places",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 150,
+          "description": "The decision question (e.g. ¿Dónde cenamos el viernes?)"
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the creator"
+        },
+        "memberIds": {
+          "type": "array",
+          "description": "List of user UIDs who are members of this list"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["title", "ownerId", "memberIds", "createdAt"]
+    },
+    "listOption": {
+      "title": "ListOption",
+      "description": "A place proposed as an option to vote on in a group list",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Place name"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["comer", "cafe", "salir", "paseo"],
+          "description": "Place category"
+        },
+        "zone": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Zone or neighborhood"
+        },
+        "price": {
+          "type": "number",
+          "enum": [1, 2, 3],
+          "description": "Price level"
+        },
+        "addedBy": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of member who proposed this place"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when proposed"
+        }
+      },
+      "required": ["name", "category", "zone", "price", "addedBy", "createdAt"]
+    },
+    "listVote": {
+      "title": "ListVote",
+      "description": "A single vote cast by a member for an option in a list",
+      "type": "object",
+      "properties": {
+        "optionId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "The recommendation ID chosen"
+        }
+      },
+      "required": ["optionId"]
+    },
+    "admin": {
+      "title": "Admin",
+      "description": "Administrator permission record keyed by user UID",
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "Admin role indicator"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/recommendations/{recommendationId}": {
+      "schema": "recommendation",
+      "description": "Place recommendations collection"
+    },
+    "/recommendations/{recommendationId}/reviews/{reviewId}": {
+      "schema": "review",
+      "description": "Reviews left by visitors who also went to the place"
+    },
+    "/users/{uid}/saved/{recommendationId}": {
+      "schema": "savedPlace",
+      "description": "Private places saved by the user to visit later"
+    },
+    "/lists/{listId}": {
+      "schema": "groupList",
+      "description": "Group voting lists"
+    },
+    "/lists/{listId}/options/{optionId}": {
+      "schema": "listOption",
+      "description": "Proposed place options for a group list"
+    },
+    "/lists/{listId}/votes/{uid}": {
+      "schema": "listVote",
+      "description": "Votes cast by members for options in a group list"
+    },
+    "/admins/{uid}": {
+      "schema": "admin",
+      "description": "Admin membership records"
+    }
+  }
+}
