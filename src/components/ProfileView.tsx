@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import type { Recommendation } from '../types';
 import { RecommendationItem } from './RecommendationItem';
-import { seedExampleRecommendations, EXAMPLE_RECOMMENDATION_NAMES } from '../services/recommendations';
+import {
+  seedExampleRecommendations,
+  EXAMPLE_RECOMMENDATION_NAMES,
+  subscribeToUserRecommendations,
+} from '../services/recommendations';
 
 interface ProfileViewProps {
   allRecommendations: Recommendation[];
@@ -25,6 +29,25 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [seedSuccessMessage, setSeedSuccessMessage] = useState<string | null>(null);
 
   const reportedCount = allRecommendations.filter((r) => r.status === 'reportada').length;
+
+  // Real-time query filtered by authorId and status as required by security rules
+  const [myRecommendations, setMyRecommendations] = useState<Recommendation[]>(() =>
+    allRecommendations.filter((item) => user && item.authorId === user.uid)
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    const unsubscribe = subscribeToUserRecommendations(
+      user.uid,
+      (items) => {
+        setMyRecommendations(items);
+      },
+      (error) => {
+        console.error('Error suscribiendo a mis recomendaciones:', error);
+      }
+    );
+    return () => unsubscribe();
+  }, [user]);
 
   if (!user) {
     return (
@@ -49,11 +72,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
     );
   }
-
-  // User recommendations
-  const myRecommendations = allRecommendations.filter(
-    (item) => item.authorId === user.uid
-  );
 
   // Check if example recommendations already exist in feed
   const examplesAlreadyLoaded = allRecommendations.some((item) =>

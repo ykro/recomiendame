@@ -77,6 +77,56 @@ export function subscribeToFeed(
   );
 }
 
+// Subscribe to user's recommendations (Mis recomendaciones, filtering by authorId and status)
+export function subscribeToUserRecommendations(
+  authorId: string,
+  onSuccess: (recommendations: Recommendation[]) => void,
+  onError?: (error: Error) => void
+) {
+  const colRef = collection(db, 'recommendations');
+  const q = query(
+    colRef,
+    where('authorId', '==', authorId),
+    where('status', 'in', ['publicada', 'reportada'])
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const items: Recommendation[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        items.push({
+          id: docSnap.id,
+          name: data.name || '',
+          category: data.category || 'comer',
+          zone: data.zone || '',
+          price: data.price || 1,
+          rating: data.rating || 5,
+          whatToOrder: data.whatToOrder || '',
+          comment: data.comment || '',
+          authorId: data.authorId || '',
+          authorName: data.authorName || '',
+          status: data.status || 'publicada',
+          reviewCount: data.reviewCount ?? 0,
+          ratingSum: data.ratingSum ?? 0,
+          createdAt: data.createdAt,
+        });
+      });
+      items.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+        return timeB - timeA;
+      });
+      onSuccess(items);
+    },
+    (error) => {
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.LIST, 'recommendations');
+    }
+  );
+}
+
 // Subscribe to a single recommendation for live changes in detail view
 export function subscribeToRecommendation(
   id: string,
