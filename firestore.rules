@@ -85,6 +85,27 @@ service cloud.firestore {
       data.savedAt is timestamp;
     }
 
+    // Helper: reviewCount y ratingSum solo cambian junto con la reseña de quien escribe en la misma transacción
+    function isReviewCountSync(recommendationId) {
+      let reviewPath = /databases/$(database)/documents/recommendations/$(recommendationId)/reviews/$(request.auth.uid);
+      let wasReview = exists(reviewPath);
+      let hasReviewAfter = existsAfter(reviewPath);
+      return (
+        // Crear reseña: antes no existía, existe después
+        (!wasReview && hasReviewAfter &&
+         incoming().reviewCount == existing().reviewCount + 1 &&
+         incoming().ratingSum == existing().ratingSum + getAfter(reviewPath).data.rating) ||
+        // Editar reseña: existía antes y después
+        (wasReview && hasReviewAfter &&
+         incoming().reviewCount == existing().reviewCount &&
+         incoming().ratingSum == existing().ratingSum + (getAfter(reviewPath).data.rating - get(reviewPath).data.rating)) ||
+        // Borrar reseña: existía antes, no existe después
+        (wasReview && !hasReviewAfter &&
+         incoming().reviewCount == existing().reviewCount - 1 &&
+         incoming().ratingSum == existing().ratingSum - get(reviewPath).data.rating)
+      );
+    }
+
     function isListMember(listId) {
       return isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/lists/$(listId)).data.memberIds;
     }
@@ -95,7 +116,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Private Quiero ir collection: solo su duena lee y cambia su Quiero ir. Nadie mas, ni la administradora.
+    // 5. Nadie lee ni escribe el Quiero ir de otra persona (tampoco la administradora)
     match /users/{userId}/saved/{savedId} {
       allow read: if isSignedIn() && request.auth.uid == userId;
 
@@ -116,11 +137,11 @@ service cloud.firestore {
     }
 
     match /recommendations/{recommendationId} {
-      // Cualquiera lee publicada o reportada; oculta solo administradora o autora
+      // 1. Visitante lee publicadas y reportadas. Oculto solo administradora
       allow get: if resource.data.status in ['publicada', 'reportada'] ||
-                    (isAdmin() && resource.data.status == 'oculta') ||
-                    (isSignedIn() && resource.data.authorId == request.auth.uid);
+                    (isAdmin() && resource.data.status == 'oculta');
 
+      // 8. Consultas con filtros: feed (publicadas y reportadas), perfil (authorId y status) y moderacion (reportada y oculta)
       allow list: if resource.data.status in ['publicada', 'reportada'] ||
                      (isAdmin() && resource.data.status in ['reportada', 'oculta']);
 
@@ -139,35 +160,36 @@ service cloud.firestore {
                        incoming().authorId == existing().authorId &&
                        incoming().createdAt == existing().createdAt &&
                        (
-                         // Author edit: content fields or status
+                         // 2. Solo la autora edita su recomendación (no cambia status ni contadores)
                          (existing().authorId == request.auth.uid &&
+                          incoming().status == existing().status &&
                           incoming().diff(existing()).affectedKeys().hasOnly([
                             'name', 'category', 'zone', 'price', 'rating',
-                            'whatToOrder', 'comment', 'authorName', 'status'
+                            'whatToOrder', 'comment', 'authorName'
                           ])) ||
-                         // Reviewer atomic update: reviewCount and ratingSum during transaction
+                         // 3. reviewCount y ratingSum solo cambian junto con la reseña de quien escribe, en la misma transacción y exactamente por su calificación
                          (existing().authorId != request.auth.uid &&
-                          incoming().diff(existing()).affectedKeys().hasOnly([
-                            'reviewCount', 'ratingSum'
-                          ])) ||
+                          incoming().diff(existing()).affectedKeys().hasOnly(['reviewCount', 'ratingSum']) &&
+                          isReviewCountSync(recommendationId)) ||
                          // Reportar: solo cambia status de publicada a reportada
                          (existing().authorId != request.auth.uid &&
                           existing().status == 'publicada' &&
                           incoming().status == 'reportada' &&
                           incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
-                         // Administradora: solo cambia status (a oculta o a publicada), no edita lo de otros
+                         // 4. La administradora solo cambia status: no edita datos ni contadores de nadie
                          (isAdmin() &&
                           incoming().status in ['publicada', 'oculta'] &&
                           incoming().diff(existing()).affectedKeys().hasOnly(['status']))
                        );
 
-      // Solo la autora borra su recomendacion. La administradora no borra lo de otras personas.
+      // 2. Solo la autora borra su recomendacion. La administradora no borra lo de otras personas.
       allow delete: if isSignedIn() &&
                        isValidId(recommendationId) &&
                        existing().authorId == request.auth.uid;
 
-      // Reviews subcollection
+      // Subcolección de reseñas
       match /reviews/{reviewId} {
+        // 1. Si la recomendación está oculta, sus reseñas dejan de ser públicas (solo administradora las lee)
         allow read: if get(/databases/$(database)/documents/recommendations/$(recommendationId)).data.status in ['publicada', 'reportada'] ||
                        isAdmin();
 
@@ -179,6 +201,7 @@ service cloud.firestore {
                          incoming().createdAt == request.time &&
                          get(/databases/$(database)/documents/recommendations/$(recommendationId)).data.authorId != request.auth.uid;
 
+        // 2. Solo la autora edita su reseña
         allow update: if isSignedIn() &&
                          isValidId(reviewId) &&
                          reviewId == request.auth.uid &&
@@ -190,16 +213,15 @@ service cloud.firestore {
                            'rating', 'comment', 'authorName'
                          ]);
 
+        // 2. Solo la autora borra su reseña (nadie más, tampoco administradora)
         allow delete: if isSignedIn() &&
                          isValidId(reviewId) &&
-                         (
-                           (reviewId == request.auth.uid && existing().authorId == request.auth.uid) ||
-                           isAdmin()
-                         );
+                         reviewId == request.auth.uid &&
+                         existing().authorId == request.auth.uid;
       }
     }
 
-    // Group decision lists
+    // 7. Quien no es miembro no lee una lista, sus lugares ni sus votos (tampoco la administradora)
     match /lists/{listId} {
       allow get, list: if isSignedIn() && request.auth.uid in resource.data.memberIds;
 
@@ -216,6 +238,7 @@ service cloud.firestore {
       allow update: if isSignedIn() &&
                        isValidId(listId) &&
                        (
+                         // 6. Solo puede agregarse a sí misma a una lista (memberIds crece exactamente en 1 con tu propio uid)
                          (
                            !(request.auth.uid in existing().memberIds) &&
                            incoming().diff(existing()).affectedKeys().hasOnly(['memberIds']) &&
@@ -223,6 +246,7 @@ service cloud.firestore {
                            incoming().memberIds.hasAll(existing().memberIds) &&
                            incoming().memberIds.hasAll([request.auth.uid])
                          ) ||
+                         // Dueña actualizando la lista
                          (
                            existing().ownerId == request.auth.uid &&
                            incoming().ownerId == existing().ownerId &&
@@ -230,6 +254,7 @@ service cloud.firestore {
                          )
                        );
 
+      // Solo la creadora borra la lista
       allow delete: if isSignedIn() &&
                        isValidId(listId) &&
                        existing().ownerId == request.auth.uid;
@@ -254,6 +279,7 @@ service cloud.firestore {
                          );
       }
 
+      // 6. Cada persona tiene un solo voto por lista (el id del documento es su propio uid)
       match /votes/{voteUid} {
         allow read: if isListMember(listId);
 
