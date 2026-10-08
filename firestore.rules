@@ -1,0 +1,270 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email == 'tu-correo@gmail.com' && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isValidRecommendation(data) {
+      return data.keys().hasAll([
+        'name', 'category', 'zone', 'price', 'rating',
+        'whatToOrder', 'comment', 'authorId', 'authorName',
+        'status', 'reviewCount', 'ratingSum', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'name', 'category', 'zone', 'price', 'rating',
+        'whatToOrder', 'comment', 'authorId', 'authorName',
+        'status', 'reviewCount', 'ratingSum', 'createdAt'
+      ]) &&
+      data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+      data.category in ['comer', 'cafe', 'salir', 'paseo'] &&
+      data.zone is string && data.zone.size() > 0 && data.zone.size() <= 100 &&
+      data.price in [1, 2, 3] &&
+      data.rating in [1, 2, 3, 4, 5] &&
+      data.whatToOrder is string && data.whatToOrder.size() <= 200 &&
+      data.comment is string && data.comment.size() <= 1000 &&
+      data.authorId is string && data.authorId.size() <= 128 && data.authorId.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.authorName is string && data.authorName.size() <= 100 &&
+      data.status in ['publicada', 'reportada', 'oculta'] &&
+      data.reviewCount is number && data.reviewCount >= 0 &&
+      data.ratingSum is number && data.ratingSum >= 0 &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidReview(data, recId) {
+      return data.keys().hasAll([
+        'recommendationId', 'authorId', 'authorName', 'rating', 'comment', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'recommendationId', 'authorId', 'authorName', 'rating', 'comment', 'createdAt'
+      ]) &&
+      data.recommendationId == recId &&
+      data.authorId is string && data.authorId.size() <= 128 && data.authorId.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.authorName is string && data.authorName.size() <= 100 &&
+      data.rating in [1, 2, 3, 4, 5] &&
+      data.comment is string && data.comment.size() <= 1000 &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidSavedPlace(data, recId) {
+      return data.keys().hasAll([
+        'recommendationId', 'name', 'category', 'zone', 'price', 'savedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'recommendationId', 'name', 'category', 'zone', 'price', 'savedAt'
+      ]) &&
+      data.recommendationId == recId &&
+      data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+      data.category in ['comer', 'cafe', 'salir', 'paseo'] &&
+      data.zone is string && data.zone.size() > 0 && data.zone.size() <= 100 &&
+      data.price in [1, 2, 3] &&
+      data.savedAt is timestamp;
+    }
+
+    function isListMember(listId) {
+      return isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/lists/$(listId)).data.memberIds;
+    }
+
+    match /admins/{uid} {
+      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow write: if false;
+    }
+
+    // Private Quiero ir collection: solo su duena lee y cambia su Quiero ir. Nadie mas, ni la administradora.
+    match /users/{userId}/saved/{savedId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       isValidId(savedId) &&
+                       isValidSavedPlace(incoming(), savedId) &&
+                       incoming().savedAt == request.time;
+
+      allow update: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       isValidId(savedId) &&
+                       isValidSavedPlace(incoming(), savedId);
+
+      allow delete: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       isValidId(savedId);
+    }
+
+    match /recommendations/{recommendationId} {
+      // Cualquiera lee publicada o reportada; oculta solo administradora o autora
+      allow get: if resource.data.status in ['publicada', 'reportada'] ||
+                    (isAdmin() && resource.data.status == 'oculta') ||
+                    (isSignedIn() && resource.data.authorId == request.auth.uid);
+
+      allow list: if resource.data.status in ['publicada', 'reportada'] ||
+                     (isAdmin() && resource.data.status in ['reportada', 'oculta']);
+
+      allow create: if isSignedIn() &&
+                       isValidId(recommendationId) &&
+                       isValidRecommendation(incoming()) &&
+                       incoming().authorId == request.auth.uid &&
+                       incoming().status == 'publicada' &&
+                       incoming().reviewCount == 0 &&
+                       incoming().ratingSum == 0 &&
+                       incoming().createdAt == request.time;
+
+      allow update: if isSignedIn() &&
+                       isValidId(recommendationId) &&
+                       isValidRecommendation(incoming()) &&
+                       incoming().authorId == existing().authorId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         // Author edit: content fields or status
+                         (existing().authorId == request.auth.uid &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'name', 'category', 'zone', 'price', 'rating',
+                            'whatToOrder', 'comment', 'authorName', 'status'
+                          ])) ||
+                         // Reviewer atomic update: reviewCount and ratingSum during transaction
+                         (existing().authorId != request.auth.uid &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'reviewCount', 'ratingSum'
+                          ])) ||
+                         // Reportar: solo cambia status de publicada a reportada
+                         (existing().authorId != request.auth.uid &&
+                          existing().status == 'publicada' &&
+                          incoming().status == 'reportada' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+                         // Administradora: solo cambia status (a oculta o a publicada), no edita lo de otros
+                         (isAdmin() &&
+                          incoming().status in ['publicada', 'oculta'] &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status']))
+                       );
+
+      // Solo la autora borra su recomendacion. La administradora no borra lo de otras personas.
+      allow delete: if isSignedIn() &&
+                       isValidId(recommendationId) &&
+                       existing().authorId == request.auth.uid;
+
+      // Reviews subcollection
+      match /reviews/{reviewId} {
+        allow read: if get(/databases/$(database)/documents/recommendations/$(recommendationId)).data.status in ['publicada', 'reportada'] ||
+                       isAdmin();
+
+        allow create: if isSignedIn() &&
+                         isValidId(reviewId) &&
+                         reviewId == request.auth.uid &&
+                         isValidReview(incoming(), recommendationId) &&
+                         incoming().authorId == request.auth.uid &&
+                         incoming().createdAt == request.time &&
+                         get(/databases/$(database)/documents/recommendations/$(recommendationId)).data.authorId != request.auth.uid;
+
+        allow update: if isSignedIn() &&
+                         isValidId(reviewId) &&
+                         reviewId == request.auth.uid &&
+                         existing().authorId == request.auth.uid &&
+                         isValidReview(incoming(), recommendationId) &&
+                         incoming().authorId == existing().authorId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'rating', 'comment', 'authorName'
+                         ]);
+
+        allow delete: if isSignedIn() &&
+                         isValidId(reviewId) &&
+                         (
+                           (reviewId == request.auth.uid && existing().authorId == request.auth.uid) ||
+                           isAdmin()
+                         );
+      }
+    }
+
+    // Group decision lists
+    match /lists/{listId} {
+      allow get, list: if isSignedIn() && request.auth.uid in resource.data.memberIds;
+
+      allow create: if isSignedIn() &&
+                       isValidId(listId) &&
+                       incoming().ownerId == request.auth.uid &&
+                       incoming().memberIds.size() == 1 &&
+                       incoming().memberIds.hasOnly([request.auth.uid]) &&
+                       incoming().title is string &&
+                       incoming().title.size() > 0 &&
+                       incoming().title.size() <= 150 &&
+                       incoming().createdAt == request.time;
+
+      allow update: if isSignedIn() &&
+                       isValidId(listId) &&
+                       (
+                         (
+                           !(request.auth.uid in existing().memberIds) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['memberIds']) &&
+                           incoming().memberIds.size() == existing().memberIds.size() + 1 &&
+                           incoming().memberIds.hasAll(existing().memberIds) &&
+                           incoming().memberIds.hasAll([request.auth.uid])
+                         ) ||
+                         (
+                           existing().ownerId == request.auth.uid &&
+                           incoming().ownerId == existing().ownerId &&
+                           incoming().createdAt == existing().createdAt
+                         )
+                       );
+
+      allow delete: if isSignedIn() &&
+                       isValidId(listId) &&
+                       existing().ownerId == request.auth.uid;
+
+      match /options/{optionId} {
+        allow read: if isListMember(listId);
+
+        allow create: if isListMember(listId) &&
+                         isValidId(optionId) &&
+                         incoming().addedBy == request.auth.uid &&
+                         incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 100 &&
+                         incoming().category in ['comer', 'cafe', 'salir', 'paseo'] &&
+                         incoming().zone is string && incoming().zone.size() > 0 && incoming().zone.size() <= 100 &&
+                         incoming().price in [1, 2, 3] &&
+                         incoming().createdAt == request.time;
+
+        allow delete: if isListMember(listId) &&
+                         isValidId(optionId) &&
+                         (
+                           existing().addedBy == request.auth.uid ||
+                           get(/databases/$(database)/documents/lists/$(listId)).data.ownerId == request.auth.uid
+                         );
+      }
+
+      match /votes/{voteUid} {
+        allow read: if isListMember(listId);
+
+        allow create, update: if isListMember(listId) &&
+                                 voteUid == request.auth.uid &&
+                                 isValidId(incoming().optionId) &&
+                                 exists(/databases/$(database)/documents/lists/$(listId)/options/$(incoming().optionId));
+
+        allow delete: if isListMember(listId) &&
+                         voteUid == request.auth.uid;
+      }
+    }
+  }
+}

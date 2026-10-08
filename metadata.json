@@ -1,0 +1,6 @@
+{
+  "name": "Recomiéndame",
+  "description": "Comparte y califica lugares favoritos entre amigos sin que se pierdan en el chat.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
