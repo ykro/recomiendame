@@ -1,9 +1,23 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, type User } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
+import appletConfig from '../firebase-applet-config.json';
+
+const firebaseConfig = {
+  ...appletConfig,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || appletConfig.apiKey,
+};
 
 const app = initializeApp(firebaseConfig);
+
+// App Check: the demo project only accepts Firestore requests from this app
+if (firebaseConfig.recaptchaSiteKey) {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider(firebaseConfig.recaptchaSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
 
 // CRITICAL: Initialize Firestore with firestoreDatabaseId as required
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);

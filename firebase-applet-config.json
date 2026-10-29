@@ -1,12 +1,12 @@
 {
-  "projectId": "idea-to-app-grabacion",
-  "appId": "1:1081077700291:web:366624d959d3acd5e07476",
+  "projectId": "ai-experiments-487722",
+  "appId": "1:611681112050:web:6358fe4f39bb99bdf6e56b",
   "apiKey": "",
-  "authDomain": "idea-to-app-grabacion.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-5b2c97b3-e9ba-4ab5-8332-f905d4b02068",
-  "storageBucket": "idea-to-app-grabacion.firebasestorage.app",
-  "messagingSenderId": "1081077700291",
+  "authDomain": "ai-experiments-487722.firebaseapp.com",
+  "firestoreDatabaseId": "recomiendame",
+  "storageBucket": "ai-experiments-487722.firebasestorage.app",
+  "messagingSenderId": "611681112050",
   "measurementId": "",
-  "oAuthClientId": "1081077700291-omh3ognnq65d2haqv3dcmlekhifcf165.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "oAuthClientId": "611681112050-saaes318faor249aj6b6rvccatkiubp2.apps.googleusercontent.com",
+  "recaptchaSiteKey": "6LfIqQYuAAAAAP1Ve83Y7ltkYRDSZVW2Y5Jq4vMJ"
 }
